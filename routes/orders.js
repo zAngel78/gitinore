@@ -2,6 +2,7 @@ const express = require('express');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
+const NotificationConfig = require('../models/NotificationConfig');
 const { protect, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 const { sendNewOrderNotification } = require('../services/emailService');
@@ -210,11 +211,11 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
       { path: 'createdBy', select: 'name email' }
     ]);
 
-    // Enviar notificaciones por email a todos los usuarios
+    // Enviar notificaciones por email según configuración
     try {
-      const allUsers = await User.find({ isActive: { $ne: false } }, 'name email role');
-      const emailResult = await sendNewOrderNotification(order, allUsers);
-      console.log(`📧 Notificaciones enviadas: ${emailResult.sent || 0} exitosas, ${emailResult.failed || 0} fallidas`);
+      const notificationConfig = await NotificationConfig.getOrCreateConfig();
+      const emailResult = await sendNewOrderNotification(order, notificationConfig);
+      console.log(`📧 Notificaciones enviadas: ${emailResult.sent || 0} exitosas, ${emailResult.failed || 0} fallidas de ${emailResult.totalConfigured || 0} configurados`);
     } catch (emailError) {
       console.error('Error enviando notificaciones por email:', emailError);
       // No fallar la creación del pedido por errores de email

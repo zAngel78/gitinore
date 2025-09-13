@@ -106,7 +106,7 @@ const generateNewOrderEmail = (order, customer, user) => {
 };
 
 // Función para enviar notificación de nuevo pedido
-const sendNewOrderNotification = async (order, allUsers) => {
+const sendNewOrderNotification = async (order, notificationConfig) => {
   try {
     const transporter = createTransporter();
 
@@ -114,6 +114,12 @@ const sendNewOrderNotification = async (order, allUsers) => {
     if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
       console.log('⚠️ Configuración de Gmail no encontrada - saltando envío de email');
       return { success: false, message: 'Configuración de Gmail no encontrada' };
+    }
+
+    // Verificar si las notificaciones están habilitadas
+    if (!notificationConfig || !notificationConfig.settings.enabled || !notificationConfig.settings.notifyOnOrderCreate) {
+      console.log('🔕 Notificaciones deshabilitadas por configuración');
+      return { success: false, message: 'Notificaciones deshabilitadas' };
     }
 
     // Populate data necesaria
@@ -125,23 +131,29 @@ const sendNewOrderNotification = async (order, allUsers) => {
 
     const emailContent = generateNewOrderEmail(order, order.customer, order.createdBy);
 
-    // Enviar email a todos los usuarios activos
-    const activeUsers = allUsers.filter(user => user.isActive !== false);
-    const emailPromises = activeUsers.map(user => {
-      if (!user.email) return Promise.resolve({ success: false, user: user.name, error: 'Sin email' });
+    // Obtener emails activos desde la configuración
+    const activeEmails = notificationConfig.getActiveEmails();
 
+    if (activeEmails.length === 0) {
+      console.log('📭 No hay emails configurados para notificaciones');
+      return { success: false, message: 'No hay emails configurados' };
+    }
+
+    const emailPromises = activeEmails.map(emailData => {
       return transporter.sendMail({
         from: `"Sistema de Pedidos" <${process.env.GMAIL_USER}>`,
-        to: user.email,
+        to: emailData.email,
         ...emailContent
       }).then(() => ({
         success: true,
-        user: user.name,
-        email: user.email
+        name: emailData.name,
+        email: emailData.email,
+        type: emailData.type
       })).catch(error => ({
         success: false,
-        user: user.name,
-        email: user.email,
+        name: emailData.name,
+        email: emailData.email,
+        type: emailData.type,
         error: error.message
       }));
     });
@@ -151,11 +163,13 @@ const sendNewOrderNotification = async (order, allUsers) => {
     const failed = results.filter(r => r.status === 'rejected' || !r.value.success).length;
 
     console.log(`📧 Notificaciones enviadas: ${successful} exitosas, ${failed} fallidas`);
+    console.log(`📬 Enviado a: ${activeEmails.map(e => `${e.name} (${e.email})`).join(', ')}`);
 
     return {
       success: true,
       sent: successful,
       failed: failed,
+      totalConfigured: activeEmails.length,
       details: results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: r.reason })
     };
 

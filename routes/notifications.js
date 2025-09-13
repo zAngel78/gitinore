@@ -20,7 +20,22 @@ router.post('/test', authorize('admin'), async (req, res) => {
       return res.status(400).json({ message: 'Email es requerido' });
     }
 
+    // Verificar configuración de Gmail
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      console.error('❌ Variables de entorno Gmail no configuradas:', {
+        GMAIL_USER: !!process.env.GMAIL_USER,
+        GMAIL_APP_PASSWORD: !!process.env.GMAIL_APP_PASSWORD
+      });
+      return res.status(500).json({
+        success: false,
+        message: 'Configuración de Gmail incompleta',
+        error: 'Variables de entorno GMAIL_USER o GMAIL_APP_PASSWORD no están configuradas'
+      });
+    }
+
+    console.log(`📧 Enviando email de prueba a: ${email}`);
     const result = await sendTestEmail(email);
+    console.log('📧 Resultado del envío:', result);
 
     if (result.success) {
       res.json({
@@ -28,6 +43,7 @@ router.post('/test', authorize('admin'), async (req, res) => {
         message: 'Email de prueba enviado correctamente'
       });
     } else {
+      console.error('❌ Error enviando email:', result.message);
       res.status(500).json({
         success: false,
         message: 'Error enviando email de prueba',
@@ -35,6 +51,7 @@ router.post('/test', authorize('admin'), async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('❌ Error en ruta de test:', error);
     res.status(500).json({
       success: false,
       message: 'Error en el servidor',

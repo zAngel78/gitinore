@@ -1,8 +1,10 @@
 const express = require('express');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { sendNewOrderNotification } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -145,12 +147,16 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
           (existing.status === 'pendiente' || existing.status === 'compra')
         );
         if (existingItem) {
+          const product = products.find(p => p._id.toString() === item.product);
           duplicates.push({
             orderId: order._id,
+            orderNumber: order.order_number,
             itemId: existingItem._id,
             productId: item.product,
+            productName: product?.name || 'Producto no encontrado',
             existingQty: existingItem.quantity,
-            newQty: item.quantity
+            newQty: item.quantity,
+            unitOfMeasure: existingItem.unit_of_measure
           });
         }
       }
@@ -203,6 +209,16 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
       { path: 'items.product', select: 'name sku brand' },
       { path: 'createdBy', select: 'name email' }
     ]);
+
+    // Enviar notificaciones por email a todos los usuarios
+    try {
+      const allUsers = await User.find({ isActive: { $ne: false } }, 'name email role');
+      const emailResult = await sendNewOrderNotification(order, allUsers);
+      console.log(`📧 Notificaciones enviadas: ${emailResult.sent || 0} exitosas, ${emailResult.failed || 0} fallidas`);
+    } catch (emailError) {
+      console.error('Error enviando notificaciones por email:', emailError);
+      // No fallar la creación del pedido por errores de email
+    }
 
     res.status(201).json({
       success: true,
@@ -329,6 +345,53 @@ router.patch('/:id/nullify', authorize('facturador', 'admin'), async (req, res) 
     });
   } catch (error) {
     res.status(500).json({ message: 'Error al anular orden', error: error.message });
+  }
+});
+
+// @desc    Actualizar orden para facturador (campos permitidos)
+// @route   PATCH /api/orders/:id
+// @access  Private (Facturador, Admin)
+router.patch('/:id', authorize('facturador', 'admin'), async (req, res) => {
+  try {
+    const { status, location, notes } = req.body;
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Orden no encontrada' });
+    }
+
+    // Actualizar campos permitidos para facturador
+    if (status && ['pendiente', 'compra', 'facturado', 'nulo'].includes(status)) {
+      order.status = status;
+      order.items.forEach(item => {
+        item.status = status;
+      });
+    }
+
+    if (location !== undefined) {
+      order.location = location;
+    }
+
+    if (notes !== undefined) {
+      order.notes = notes;
+    }
+
+    order.updatedBy = req.user.id;
+    await order.save();
+
+    await order.populate([
+      { path: 'customer', select: 'name tax_id email' },
+      { path: 'items.product', select: 'name sku brand' },
+      { path: 'updatedBy', select: 'name email' }
+    ]);
+
+    res.json({
+      success: true,
+      data: order,
+      message: 'Orden actualizada exitosamente'
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar orden', error: error.message });
   }
 });
 

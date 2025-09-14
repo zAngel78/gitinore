@@ -5,7 +5,50 @@ const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Aplicar protección a todas las rutas
+// @desc    Crear usuario admin de emergencia (solo si no hay admins)
+// @route   POST /api/users/emergency-admin
+// @access  Public (solo funciona si no hay admins en el sistema)
+router.post('/emergency-admin', async (req, res) => {
+  try {
+    // Verificar si ya hay administradores
+    const adminCount = await User.countDocuments({ role: 'admin' });
+
+    if (adminCount > 0) {
+      return res.status(400).json({
+        message: 'Ya existen administradores en el sistema. Use el proceso normal.'
+      });
+    }
+
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Todos los campos son requeridos' });
+    }
+
+    // Crear el primer admin
+    const admin = await User.create({
+      name,
+      email,
+      password,
+      role: 'admin'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Administrador de emergencia creado exitosamente',
+      data: {
+        _id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al crear administrador', error: error.message });
+  }
+});
+
+// Aplicar protección a todas las rutas restantes
 router.use(protect);
 router.use(authorize('admin')); // Solo administradores
 

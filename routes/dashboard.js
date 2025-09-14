@@ -71,11 +71,11 @@ router.get('/metrics', async (req, res) => {
       getKPIForPeriod(startOfMonth)
     ]);
 
-    // Estados de entrega
+    // Estados de entrega - calculamos para todos los pedidos activos
     const deliveryStats = await Order.aggregate([
       {
         $match: {
-          status: 'facturado'
+          status: { $ne: 'nulo' } // Excluir solo pedidos anulados
         }
       },
       {
@@ -100,6 +100,22 @@ router.get('/metrics', async (req, res) => {
                 0
               ]
             }
+          },
+          // Contar pedidos por estado
+          pendienteCount: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'pendiente'] }, 1, 0]
+            }
+          },
+          compraCount: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'compra'] }, 1, 0]
+            }
+          },
+          facturadoCount: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'facturado'] }, 1, 0]
+            }
           }
         }
       }
@@ -108,10 +124,21 @@ router.get('/metrics', async (req, res) => {
     const deliverySummary = deliveryStats.length > 0 ? deliveryStats[0] : {
       total: 0,
       delivered: 0,
-      overdue: 0
+      overdue: 0,
+      pendienteCount: 0,
+      compraCount: 0,
+      facturadoCount: 0
     };
 
+    // Pedidos pendientes = todos los que no han sido entregados
     deliverySummary.pending = deliverySummary.total - deliverySummary.delivered;
+
+    // Agregar información adicional por estado
+    deliverySummary.byStatus = {
+      pendiente: deliverySummary.pendienteCount,
+      compra: deliverySummary.compraCount,
+      facturado: deliverySummary.facturadoCount
+    };
 
     res.json({
       success: true,

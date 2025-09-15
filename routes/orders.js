@@ -247,6 +247,12 @@ router.patch('/:id/status', authorize('facturador', 'admin'), validate(schemas.o
     order.items.forEach(item => {
       item.status = status;
     });
+
+    // Si se cambia a un estado anterior (compra/pendiente), limpiar fecha de entrega
+    if (['compra', 'pendiente'].includes(status) && order.delivered_at) {
+      order.delivered_at = null;
+    }
+
     order.updatedBy = req.user.id;
 
     await order.save();
@@ -367,6 +373,11 @@ router.patch('/:id', authorize('facturador', 'admin'), async (req, res) => {
       order.items.forEach(item => {
         item.status = status;
       });
+
+      // Si se cambia a un estado anterior (compra/pendiente), limpiar fecha de entrega
+      if (['compra', 'pendiente'].includes(status) && order.delivered_at) {
+        order.delivered_at = null;
+      }
     }
 
     if (location !== undefined) {

@@ -360,14 +360,14 @@ router.patch('/:id/nullify', authorize('facturador', 'admin'), async (req, res) 
 // @access  Private (Facturador, Admin)
 router.patch('/:id', authorize('facturador', 'admin'), async (req, res) => {
   try {
-    const { status, location, notes } = req.body;
+    const { status, location, notes, delivery_due, customer, items } = req.body;
 
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Orden no encontrada' });
     }
 
-    // Actualizar campos permitidos para facturador
+    // Actualizar campos permitidos para facturador/admin
     if (status && ['pendiente', 'compra', 'facturado', 'nulo'].includes(status)) {
       order.status = status;
       order.items.forEach(item => {
@@ -386,6 +386,18 @@ router.patch('/:id', authorize('facturador', 'admin'), async (req, res) => {
 
     if (notes !== undefined) {
       order.notes = notes;
+    }
+
+    if (delivery_due) {
+      order.delivery_due = new Date(delivery_due);
+    }
+
+    if (customer) {
+      order.customer = customer;
+    }
+
+    if (items && Array.isArray(items)) {
+      order.items = items;
     }
 
     order.updatedBy = req.user.id;

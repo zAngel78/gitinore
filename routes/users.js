@@ -100,10 +100,15 @@ router.get('/', async (req, res) => {
 // @access  Private (Admin)
 router.post('/', async (req, res) => {
   try {
+    console.log('📥 Datos recibidos para crear usuario:', req.body);
+
     const { name, email, password, role } = req.body;
+
+    console.log('🔍 Validando campos:', { name: !!name, email: !!email, password: !!password, role: !!role });
 
     // Validaciones
     if (!name || !email || !password || !role) {
+      console.log('❌ Faltan campos requeridos');
       return res.status(400).json({ message: 'Todos los campos son requeridos' });
     }
 

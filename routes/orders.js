@@ -183,12 +183,11 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
 
     // Si hay duplicados pero se quiere ignorar y crear nueva línea, continuar normalmente
 
-    // Validar precios y completar datos faltantes
+    // Completar datos faltantes del producto (sin precios - enfoque logístico)
     orderData.items = orderData.items.map(item => {
       const product = products.find(p => p._id.toString() === item.product);
       return {
         ...item,
-        unit_price: item.unit_price || product.unit_price,
         brand: item.brand || product.brand,
         format: item.format || product.format,
         unit_of_measure: item.unit_of_measure || product.unit_of_measure

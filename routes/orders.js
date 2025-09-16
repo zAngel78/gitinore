@@ -198,14 +198,15 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
 
     // Si hay duplicados pero se quiere ignorar y crear nueva línea, continuar normalmente
 
-    // Completar datos faltantes del producto (sin precios - enfoque logístico simplificado)
+    // Completar datos faltantes del producto (enfoque logístico - sin precios)
     orderData.items = orderData.items.map(item => {
       const product = products.find(p => p._id.toString() === item.product);
       return {
         ...item,
         unit_of_measure: 'unidad', // Valor por defecto
         brand: product.brand || '',
-        format: product.format || ''
+        format: product.format || '',
+        unit_price: 0 // Sin precios en modo logístico
       };
     });
 

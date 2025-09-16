@@ -13,8 +13,8 @@ const orderItemSchema = new mongoose.Schema({
   },
   unit_price: {
     type: Number,
-    required: [true, 'El precio unitario es requerido'],
-    min: [0, 'El precio no puede ser negativo']
+    min: [0, 'El precio no puede ser negativo'],
+    default: 0
   },
   unit_of_measure: {
     type: String,
@@ -33,9 +33,9 @@ const orderItemSchema = new mongoose.Schema({
   _id: true
 });
 
-// Virtual para calcular subtotal de cada item
+// Virtual para calcular subtotal de cada item (sin precios en modo logístico)
 orderItemSchema.virtual('subtotal').get(function() {
-  return this.quantity * this.unit_price;
+  return this.quantity * (this.unit_price || 0);
 });
 
 const orderSchema = new mongoose.Schema({
@@ -56,8 +56,7 @@ const orderSchema = new mongoose.Schema({
     default: 'pendiente'
   },
   delivery_due: {
-    type: Date,
-    required: [true, 'La fecha de entrega es requerida']
+    type: Date
   },
   delivered_at: {
     type: Date
@@ -83,9 +82,9 @@ const orderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Virtual para calcular total del pedido
+// Virtual para calcular total del pedido (sin precios en modo logístico)
 orderSchema.virtual('total').get(function() {
-  return this.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+  return this.items.reduce((sum, item) => sum + (item.quantity * (item.unit_price || 0)), 0);
 });
 
 // Virtual para contar items
@@ -93,9 +92,9 @@ orderSchema.virtual('itemCount').get(function() {
   return this.items.length;
 });
 
-// Virtual para verificar si está vencido
+// Virtual para verificar si está vencido (solo si tiene fecha de entrega)
 orderSchema.virtual('isOverdue').get(function() {
-  if (this.status !== 'facturado' || this.delivered_at) return false;
+  if (this.status !== 'facturado' || this.delivered_at || !this.delivery_due) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const due = new Date(this.delivery_due);
@@ -117,7 +116,7 @@ orderSchema.virtual('isDelivered').get(function() {
 orderSchema.index({ customer: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ createdAt: -1 });
-orderSchema.index({ delivery_due: 1 });
+orderSchema.index({ delivery_due: 1 }, { sparse: true }); // Solo indexar cuando tenga fecha
 orderSchema.index({ createdBy: 1 });
 orderSchema.index({ order_number: 1 });
 

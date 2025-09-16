@@ -35,12 +35,12 @@ router.get('/metrics', async (req, res) => {
       Product.countDocuments({ isActive: true })
     ]);
 
-    // KPIs por período
+    // KPIs por período - enfoque logístico
     const getKPIForPeriod = async (startDate) => {
-      const orders = await Order.find({ 
-        createdAt: { $gte: startDate } 
+      const orders = await Order.find({
+        createdAt: { $gte: startDate }
       }).populate('items.product');
-      
+
       const statusCount = {
         pendiente: 0,
         compra: 0,
@@ -48,19 +48,19 @@ router.get('/metrics', async (req, res) => {
         nulo: 0
       };
 
-      let totalAmount = 0;
       let totalItems = 0;
+      let totalProducts = 0;
 
       orders.forEach(order => {
         statusCount[order.status]++;
-        totalAmount += order.total;
         totalItems += order.itemCount;
+        totalProducts += order.items?.length || 0;
       });
 
       return {
         orders: orders.length,
         items: totalItems,
-        total: totalAmount,
+        products: totalProducts,
         statusCount
       };
     };
@@ -184,22 +184,59 @@ router.get('/recent-orders', async (req, res) => {
   }
 });
 
-// @desc    Obtener productos con stock bajo
-// @route   GET /api/dashboard/low-stock
+// @desc    Obtener productos más solicitados (logística)
+// @route   GET /api/dashboard/most-requested-products
 // @access  Private
-router.get('/low-stock', async (req, res) => {
+router.get('/most-requested-products', async (req, res) => {
   try {
-    const products = await Product.find({
-      isActive: true,
-      $expr: { $lte: ['$stock.current', '$stock.min_stock'] }
-    }).sort({ 'stock.current': 1 });
+    const { limit = 5, period = 30 } = req.query;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - parseInt(period));
+
+    const products = await Order.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startDate },
+          status: { $ne: 'nulo' }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.product',
+          requestCount: { $sum: 1 },
+          totalQuantity: { $sum: '$items.quantity' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      { $unwind: '$product' },
+      {
+        $project: {
+          name: '$product.name',
+          sku: '$product.sku',
+          brand: '$product.brand',
+          requestCount: 1,
+          totalQuantity: 1
+        }
+      },
+      { $sort: { requestCount: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
 
     res.json({
       success: true,
       data: products
     });
   } catch (error) {
-    res.status(500).json({ message: 'Error al obtener productos con stock bajo', error: error.message });
+    res.status(500).json({ message: 'Error al obtener productos más solicitados', error: error.message });
   }
 });
 
@@ -245,7 +282,7 @@ router.get('/stats', async (req, res) => {
             status: '$status'
           },
           count: { $sum: 1 },
-          totalAmount: { $sum: '$total' }
+          totalItems: { $sum: '$itemCount' }
         }
       },
       {
@@ -255,11 +292,11 @@ router.get('/stats', async (req, res) => {
             $push: {
               status: '$_id.status',
               count: '$count',
-              totalAmount: '$totalAmount'
+              totalItems: '$totalItems'
             }
           },
           totalOrders: { $sum: '$count' },
-          totalAmount: { $sum: '$totalAmount' }
+          totalItems: { $sum: '$totalItems' }
         }
       },
       { $sort: { '_id': 1 } }
@@ -296,7 +333,6 @@ router.get('/top-products', async (req, res) => {
         $group: {
           _id: '$items.product',
           totalQuantity: { $sum: '$items.quantity' },
-          totalAmount: { $sum: { $multiply: ['$items.quantity', '$items.unit_price'] } },
           orderCount: { $sum: 1 }
         }
       },
@@ -315,7 +351,6 @@ router.get('/top-products', async (req, res) => {
           sku: '$product.sku',
           brand: '$product.brand',
           totalQuantity: 1,
-          totalAmount: 1,
           orderCount: 1
         }
       },
@@ -352,9 +387,9 @@ router.get('/top-customers', async (req, res) => {
       {
         $group: {
           _id: '$customer',
-          totalAmount: { $sum: '$total' },
+          totalProducts: { $sum: '$itemCount' },
           orderCount: { $sum: 1 },
-          avgOrderValue: { $avg: '$total' }
+          avgProductsPerOrder: { $avg: '$itemCount' }
         }
       },
       {
@@ -371,12 +406,12 @@ router.get('/top-customers', async (req, res) => {
           name: '$customer.name',
           tax_id: '$customer.tax_id',
           email: '$customer.email',
-          totalAmount: 1,
+          totalProducts: 1,
           orderCount: 1,
-          avgOrderValue: { $round: ['$avgOrderValue', 0] }
+          avgProductsPerOrder: { $round: ['$avgProductsPerOrder', 1] }
         }
       },
-      { $sort: { totalAmount: -1 } },
+      { $sort: { totalProducts: -1 } },
       { $limit: parseInt(limit) }
     ]);
 

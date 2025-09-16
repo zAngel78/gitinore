@@ -45,19 +45,19 @@ const schemas = {
   }),
 
   product: Joi.object({
-    sku: Joi.string().required().max(50),
+    sku: Joi.string().max(50).optional(), // Auto-generado si no se envía
     name: Joi.string().required().min(2).max(200),
-    description: Joi.string().allow('').max(1000),
-    brand: Joi.string().allow('').max(100),
-    format: Joi.string().allow('').max(100),
-    unit_price: Joi.number().required().min(0),
+    description: Joi.string().allow('').max(1000).optional(),
+    brand: Joi.string().allow('').max(100).optional(),
+    format: Joi.string().allow('').max(100).optional(),
+    unit_price: Joi.number().min(0).default(0).optional(), // Sin precios requeridos
     cost_price: Joi.number().min(0).optional(),
     stock: Joi.object({
       current: Joi.number().min(0).default(0),
       min_stock: Joi.number().min(0).default(0)
     }).optional(),
-    category: Joi.string().allow('').max(100),
-    unit_of_measure: Joi.string().valid('unidad', 'par', 'metro', 'caja', 'kg', 'litro', 'pack').default('unidad')
+    category: Joi.string().allow('').max(100).optional(),
+    unit_of_measure: Joi.string().valid('unidad', 'par', 'metro', 'caja', 'kg', 'litro', 'pack').default('unidad').optional()
   }),
 
   order: Joi.object({

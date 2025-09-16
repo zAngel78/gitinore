@@ -125,10 +125,21 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
 
     // Verificar que todos los productos existen y están activos
     const productIds = orderData.items.map(item => item.product);
+    console.log('🔍 Buscando productos con IDs:', productIds);
+
     const products = await Product.find({ _id: { $in: productIds }, isActive: true });
-    
+    console.log('📦 Productos encontrados:', products.length, 'de', productIds.length);
+    console.log('📦 Productos encontrados IDs:', products.map(p => p._id.toString()));
+
     if (products.length !== productIds.length) {
-      return res.status(400).json({ message: 'Uno o más productos no están disponibles' });
+      const foundIds = products.map(p => p._id.toString());
+      const missingIds = productIds.filter(id => !foundIds.includes(id));
+      console.log('❌ Productos no encontrados:', missingIds);
+
+      return res.status(400).json({
+        message: 'Uno o más productos no están disponibles',
+        missingProducts: missingIds
+      });
     }
 
     // Buscar pedidos del mismo cliente en las últimas 24 horas
@@ -187,14 +198,14 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
 
     // Si hay duplicados pero se quiere ignorar y crear nueva línea, continuar normalmente
 
-    // Completar datos faltantes del producto (sin precios - enfoque logístico)
+    // Completar datos faltantes del producto (sin precios - enfoque logístico simplificado)
     orderData.items = orderData.items.map(item => {
       const product = products.find(p => p._id.toString() === item.product);
       return {
         ...item,
-        brand: item.brand || product.brand,
-        format: item.format || product.format,
-        unit_of_measure: item.unit_of_measure || product.unit_of_measure
+        unit_of_measure: 'unidad', // Valor por defecto
+        brand: product.brand || '',
+        format: product.format || ''
       };
     });
 

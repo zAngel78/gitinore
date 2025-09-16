@@ -66,13 +66,10 @@ const schemas = {
       Joi.object({
         product: Joi.string().required(),
         quantity: Joi.number().required().min(0.1),
-        unit_of_measure: Joi.string().valid('unidad', 'par', 'metro', 'caja', 'kg', 'litro', 'pack').default('unidad'),
-        brand: Joi.string().allow('').optional(),
-        format: Joi.string().allow('').optional(),
         notes: Joi.string().allow('').optional()
       })
     ).min(1).max(20).required(), // Máximo 20 productos por pedido
-    delivery_due: Joi.date().required(),
+    delivery_due: Joi.date().optional(),
     order_number: Joi.string().allow('').max(50).optional(),
     notes: Joi.string().allow('').max(1000).optional(),
     location: Joi.string().allow('').max(200).optional()

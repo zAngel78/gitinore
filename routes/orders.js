@@ -127,22 +127,21 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
       return res.status(400).json({ message: 'Uno o más productos no están disponibles' });
     }
 
-    // Detectar duplicados (mismo cliente + producto + día)
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-    
-    // Buscar órdenes del mismo cliente creadas hoy
-    const todayOrders = await Order.find({
+    // Buscar pedidos del mismo cliente en las últimas 24 horas
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Buscar órdenes del mismo cliente creadas en las últimas 24 horas
+    const recentOrders = await Order.find({
       customer: orderData.customer,
-      createdAt: { $gte: startOfDay, $lt: endOfDay },
+      createdAt: { $gte: twentyFourHoursAgo },
       status: { $in: ['pendiente', 'compra'] }
     });
 
-    // Verificar si algún producto ya existe en las órdenes de hoy
+    // Verificar si algún producto ya existe en las órdenes recientes (24h)
     const duplicates = [];
     for (const item of orderData.items) {
-      for (const order of todayOrders) {
+      for (const order of recentOrders) {
         const existingItem = order.items.find(existing => 
           existing.product.toString() === item.product &&
           (existing.status === 'pendiente' || existing.status === 'compra')
@@ -163,17 +162,8 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
       }
     }
 
-    // Si hay duplicados y no se especifica qué hacer, devolver aviso
-    if (duplicates.length > 0 && !req.body.handleDuplicates) {
-      return res.status(409).json({ 
-        message: 'Productos duplicados detectados',
-        duplicates: duplicates,
-        suggestion: 'merge' // suggest merging quantities
-      });
-    }
-
-    // Si hay duplicados y se quiere hacer merge
-    if (duplicates.length > 0 && req.body.handleDuplicates === 'merge') {
+    // Si hay duplicados, consolidar automáticamente
+    if (duplicates.length > 0) {
       for (const dup of duplicates) {
         const order = await Order.findById(dup.orderId);
         const itemIndex = order.items.findIndex(item => item._id.toString() === dup.itemId.toString());
@@ -185,8 +175,9 @@ router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async 
       
       return res.status(200).json({
         success: true,
-        message: 'Cantidades sumadas a pedidos existentes',
-        merged: duplicates.length
+        message: 'Productos agregados al pedido existente del mismo cliente (últimas 24h)',
+        merged: duplicates.length,
+        consolidatedOrders: duplicates.map(d => d.orderNumber)
       });
     }
 

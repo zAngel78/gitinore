@@ -2,13 +2,16 @@ const Joi = require('joi');
 
 const validate = (schema) => {
   return (req, res, next) => {
-    const { error } = schema.validate(req.body);
+    const { error, value } = schema.validate(req.body);
     if (error) {
+      console.log('❌ Error de validación:', error.details);
+      console.log('📦 Datos recibidos:', JSON.stringify(req.body, null, 2));
       return res.status(400).json({
         message: 'Datos de entrada inválidos',
         details: error.details.map(detail => detail.message)
       });
     }
+    console.log('✅ Validación exitosa');
     next();
   };
 };
@@ -64,15 +67,15 @@ const schemas = {
         product: Joi.string().required(),
         quantity: Joi.number().required().min(0.1),
         unit_of_measure: Joi.string().valid('unidad', 'par', 'metro', 'caja', 'kg', 'litro', 'pack').default('unidad'),
-        brand: Joi.string().allow(''),
-        format: Joi.string().allow(''),
-        notes: Joi.string().allow('')
+        brand: Joi.string().allow('').optional(),
+        format: Joi.string().allow('').optional(),
+        notes: Joi.string().allow('').optional()
       })
     ).min(1).max(20).required(), // Máximo 20 productos por pedido
     delivery_due: Joi.date().required(),
-    order_number: Joi.string().allow('').max(50),
-    notes: Joi.string().allow('').max(1000),
-    location: Joi.string().allow('').max(200)
+    order_number: Joi.string().allow('').max(50).optional(),
+    notes: Joi.string().allow('').max(1000).optional(),
+    location: Joi.string().allow('').max(200).optional()
   }),
 
   orderStatus: Joi.object({

@@ -114,10 +114,14 @@ router.get('/:id', async (req, res) => {
 // @access  Private (Vendedor, Admin)
 router.post('/', authorize('vendedor', 'admin'), validate(schemas.order), async (req, res) => {
   try {
+    console.log('📦 Datos recibidos para nuevo pedido:', JSON.stringify(req.body, null, 2));
+
     const orderData = {
       ...req.body,
       createdBy: req.user.id
     };
+
+    console.log('📦 orderData procesado:', JSON.stringify(orderData, null, 2));
 
     // Verificar que todos los productos existen y están activos
     const productIds = orderData.items.map(item => item.product);
